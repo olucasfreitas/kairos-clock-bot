@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 
 import { DateTime } from "luxon";
 
@@ -10,10 +11,7 @@ import {
 } from "./calendar.js";
 import { runKairosPunch } from "./kairos.js";
 
-const SCHEDULE_ACTIONS: Record<string, PunchAction> = {
-  "57 9 * * 1-5": "clock-in",
-  "57 18 * * 1-5": "clock-out"
-};
+export type ExecutionMode = "local" | "manual" | "schedule";
 
 export interface RuntimeOptions {
   action: PunchAction;
@@ -22,29 +20,71 @@ export interface RuntimeOptions {
   email: string;
   enforceScheduleWindow: boolean;
   eventName: string;
+  executionMode: ExecutionMode;
   headless: boolean;
   password: string;
   timeoutMs: number;
 }
 
 export function resolveRuntimeOptions(
+  argv: string[] = process.argv.slice(2),
   env: NodeJS.ProcessEnv = process.env
 ): RuntimeOptions {
-  const eventName = env.GITHUB_EVENT_NAME?.trim() || "workflow_dispatch";
-  const action = resolveAction(env);
-  const dryRun = parseBoolean(env.INPUT_DRY_RUN ?? env.DRY_RUN);
-  const forceLive = parseBoolean(env.INPUT_FORCE_LIVE);
+  const { values } = parseArgs({
+    args: argv,
+    allowPositionals: false,
+    options: {
+      action: {
+        type: "string"
+      },
+      "artifacts-dir": {
+        type: "string"
+      },
+      "dry-run": {
+        type: "boolean",
+        default: false
+      },
+      "execution-mode": {
+        type: "string"
+      },
+      "force-live": {
+        type: "boolean",
+        default: false
+      },
+      headful: {
+        type: "boolean",
+        default: false
+      },
+      "timeout-ms": {
+        type: "string"
+      }
+    }
+  });
+  const executionMode = normalizeExecutionMode(values["execution-mode"]);
+  const action = normalizeAction(values.action);
+  const dryRun = values["dry-run"];
+  const forceLive = values["force-live"];
   const runAttempt = parsePositiveInteger(env.GITHUB_RUN_ATTEMPT, 1);
   const email = env.KAIROS_EMAIL?.trim();
   const password = env.KAIROS_PASSWORD?.trim();
+
+  if (!action) {
+    throw new Error("The --action flag is required and must be either clock-in or clock-out.");
+  }
+
+  if (!executionMode) {
+    throw new Error(
+      "The --execution-mode flag is required and must be one of schedule, manual, or local."
+    );
+  }
 
   if (!email || !password) {
     throw new Error("KAIROS_EMAIL and KAIROS_PASSWORD must both be configured.");
   }
 
-  if (eventName === "workflow_dispatch" && !dryRun && !forceLive) {
+  if (executionMode === "manual" && !dryRun && !forceLive) {
     throw new Error(
-      "Live workflow_dispatch runs require INPUT_FORCE_LIVE=true to avoid accidental punches."
+      "Live manual runs require --force-live to avoid accidental punches."
     );
   }
 
@@ -54,19 +94,25 @@ export function resolveRuntimeOptions(
 
   return {
     action,
-    artifactsDir: env.ARTIFACTS_DIR?.trim() || "artifacts",
+    artifactsDir: values["artifacts-dir"]?.trim() || env.ARTIFACTS_DIR?.trim() || "artifacts",
     dryRun,
     email,
-    enforceScheduleWindow: eventName === "schedule" && !dryRun,
-    eventName,
-    headless: !parseBoolean(env.HEADFUL),
+    enforceScheduleWindow: executionMode === "schedule" && !dryRun,
+    eventName: executionModeToEventName(executionMode),
+    executionMode,
+    headless: values.headful ? false : !parseBoolean(env.HEADFUL),
     password,
-    timeoutMs: parsePositiveInteger(env.KAIROS_TIMEOUT_MS, 30_000)
+    timeoutMs:
+      parsePositiveInteger(values["timeout-ms"], 0) ||
+      parsePositiveInteger(env.KAIROS_TIMEOUT_MS, 30_000)
   };
 }
 
-export async function main(env: NodeJS.ProcessEnv = process.env) {
-  const options = resolveRuntimeOptions(env);
+export async function main(
+  argv: string[] = process.argv.slice(2),
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const options = resolveRuntimeOptions(argv, env);
   const now = DateTime.now().setZone(BRAZIL_TIMEZONE);
   const decision = buildPunchDecision({
     action: options.action,
@@ -108,24 +154,6 @@ export async function main(env: NodeJS.ProcessEnv = process.env) {
   }
 }
 
-function resolveAction(env: NodeJS.ProcessEnv): PunchAction {
-  const explicitAction = normalizeAction(env.INPUT_ACTION ?? env.PUNCH_ACTION);
-
-  if (explicitAction) {
-    return explicitAction;
-  }
-
-  const schedule = env.GITHUB_EVENT_SCHEDULE?.trim();
-
-  if (schedule && SCHEDULE_ACTIONS[schedule]) {
-    return SCHEDULE_ACTIONS[schedule];
-  }
-
-  throw new Error(
-    "Unable to determine the punch action. Set INPUT_ACTION, PUNCH_ACTION, or GITHUB_EVENT_SCHEDULE."
-  );
-}
-
 function normalizeAction(value?: string): PunchAction | undefined {
   const normalized = value?.trim().toLowerCase();
 
@@ -134,6 +162,27 @@ function normalizeAction(value?: string): PunchAction | undefined {
   }
 
   return undefined;
+}
+
+function normalizeExecutionMode(value?: string): ExecutionMode | undefined {
+  const normalized = value?.trim().toLowerCase();
+
+  if (normalized === "schedule" || normalized === "manual" || normalized === "local") {
+    return normalized;
+  }
+
+  return undefined;
+}
+
+function executionModeToEventName(executionMode: ExecutionMode): string {
+  switch (executionMode) {
+    case "schedule":
+      return "schedule";
+    case "manual":
+      return "workflow_dispatch";
+    default:
+      return "local";
+  }
 }
 
 function parseBoolean(value?: string): boolean {
@@ -161,7 +210,7 @@ const isDirectExecution =
   fileURLToPath(import.meta.url) === process.argv[1];
 
 if (isDirectExecution) {
-  main().catch((error) => {
+  main(process.argv.slice(2)).catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
 
     console.error(`[kairos] ${message}`);

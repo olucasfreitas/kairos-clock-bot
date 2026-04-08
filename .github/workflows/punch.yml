@@ -55,16 +55,34 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Execute Kairos automation
+      - name: Execute scheduled clock-in
+        if: github.event_name == 'schedule' && github.event.schedule == '57 9 * * 1-5'
         env:
-          ARTIFACTS_DIR: artifacts
-          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
-          INPUT_ACTION: ${{ github.event.inputs.action || '' }}
-          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
-          INPUT_FORCE_LIVE: ${{ github.event.inputs.force_live || 'false' }}
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch
+        run: npm run punch -- --action clock-in --execution-mode schedule --artifacts-dir artifacts
+
+      - name: Execute scheduled clock-out
+        if: github.event_name == 'schedule' && github.event.schedule == '57 18 * * 1-5'
+        env:
+          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
+          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
+        run: npm run punch -- --action clock-out --execution-mode schedule --artifacts-dir artifacts
+
+      - name: Execute manual Kairos automation
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
+          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
+        run: |
+          args=(--action "${{ inputs.action }}" --execution-mode manual --artifacts-dir artifacts)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          if [ "${{ inputs.force_live }}" = "true" ]; then
+            args+=(--force-live)
+          fi
+          npm run punch -- "${args[@]}"
 
       - name: Upload artifacts
         if: always()
