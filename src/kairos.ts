@@ -77,12 +77,16 @@ export function pageTextSupportsAction(
 
 export function pageShowsInlinePunchForm(pageText: string): boolean {
   const normalizedPageText = normalizeText(pageText);
-
-  return (
+  const fullInlineFormMarkers =
     normalizedPageText.includes("marcar ponto") &&
     (normalizedPageText.includes("e-mail") || normalizedPageText.includes("email")) &&
-    normalizedPageText.includes("senha")
-  );
+    normalizedPageText.includes("senha");
+  const visibleChromeMarkers =
+    normalizedPageText.includes("marcar ponto") &&
+    normalizedPageText.includes("iniciar sessao") &&
+    normalizedPageText.includes("horario de brasilia");
+
+  return fullInlineFormMarkers || visibleChromeMarkers;
 }
 
 export function punchAppearsSuccessful(

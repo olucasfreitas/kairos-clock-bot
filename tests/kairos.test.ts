@@ -49,6 +49,17 @@ describe("pageTextSupportsAction", () => {
     ).toBe(true);
   });
 
+  test("accepts the visible marcacao chrome even when input placeholders are absent from text", async () => {
+    const { pageTextSupportsAction } = await loadKairosModule();
+
+    expect(
+      pageTextSupportsAction(
+        "clock-in",
+        "Marcar ponto\nIniciar sessao\nHorario de Brasilia"
+      )
+    ).toBe(true);
+  });
+
   test("accepts entry text for clock-in runs", async () => {
     const { pageTextSupportsAction } = await loadKairosModule();
 
@@ -88,6 +99,14 @@ describe("pageShowsInlinePunchForm", () => {
     const { pageShowsInlinePunchForm } = await loadKairosModule();
 
     expect(pageShowsInlinePunchForm("Marcar ponto")).toBe(false);
+  });
+
+  test("recognizes the visible marcacao chrome without placeholder text", async () => {
+    const { pageShowsInlinePunchForm } = await loadKairosModule();
+
+    expect(
+      pageShowsInlinePunchForm("Marcar ponto\nIniciar sessao\nHorario de Brasilia")
+    ).toBe(true);
   });
 });
 
