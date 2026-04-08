@@ -1,0 +1,69 @@
+name: Kairos Punch
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Punch action to execute
+        required: true
+        type: choice
+        options:
+          - clock-in
+          - clock-out
+      dry_run:
+        description: Stop after login and page validation, before clicking the punch button
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: "57 9 * * 1-5"
+      timezone: "America/Sao_Paulo"
+    - cron: "57 18 * * 1-5"
+      timezone: "America/Sao_Paulo"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kairos-punch
+  cancel-in-progress: false
+
+jobs:
+  punch:
+    if: github.event_name == 'workflow_dispatch' || vars.KAIROS_AUTOMATION_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Execute Kairos automation
+        env:
+          ARTIFACTS_DIR: artifacts
+          GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
+          INPUT_ACTION: ${{ github.event.inputs.action || '' }}
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
+          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
+        run: npm run punch
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kairos-artifacts-${{ github.run_id }}
+          path: artifacts
+          if-no-files-found: ignore
