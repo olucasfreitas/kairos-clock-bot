@@ -51,6 +51,14 @@ export interface RunKairosPunchResult {
   screenshotPath?: string;
 }
 
+export interface InlinePunchFormSignals {
+  hasEmailField: boolean;
+  hasPasswordField: boolean;
+  hasPunchButton: boolean;
+}
+
+export type ArtifactKind = "dry-run" | "failure" | "success";
+
 export function getActionKeywords(action: PunchAction): readonly string[] {
   return ACTION_KEYWORDS[action];
 }
@@ -89,6 +97,12 @@ export function pageShowsInlinePunchForm(pageText: string): boolean {
   return fullInlineFormMarkers || visibleChromeMarkers;
 }
 
+export function inlinePunchFormSignalsPresent(
+  signals: InlinePunchFormSignals
+): boolean {
+  return signals.hasEmailField && signals.hasPasswordField && signals.hasPunchButton;
+}
+
 export function punchAppearsSuccessful(
   action: PunchAction,
   beforePunchText: string,
@@ -98,6 +112,8 @@ export function punchAppearsSuccessful(
   const normalizedAfterText = normalizeText(afterPunchText);
   const oppositeAction = action === "clock-in" ? "clock-out" : "clock-in";
   const explicitSuccessKeywords = [
+    "marcacao de ponto inserida com sucesso",
+    "inserida com sucesso",
     "registro efetuado com sucesso",
     "registrado com sucesso",
     "comprovante",
@@ -137,6 +153,13 @@ export function pickConfirmationLabel(labels: readonly string[]): string | undef
   return labels.find((label) => /confirmar|sim|ok/i.test(label));
 }
 
+export function buildArtifactLabel(
+  action: PunchAction,
+  kind: ArtifactKind
+): string {
+  return `${action}-${kind}`;
+}
+
 export async function runKairosPunch({
   action,
   artifactsDir = "artifacts",
@@ -157,9 +180,13 @@ export async function runKairosPunch({
     page.setDefaultTimeout(timeoutMs);
 
     await page.goto(KAIROS_PUNCH_URL, { waitUntil: "domcontentloaded" });
+    const directFormSignals = await inspectInlinePunchFormSignals(page);
     const beforePunchText = await getBodyText(page);
 
-    if (!pageTextSupportsAction(action, beforePunchText)) {
+    if (
+      !inlinePunchFormSignalsPresent(directFormSignals) &&
+      !pageTextSupportsAction(action, beforePunchText)
+    ) {
       throw new Error(
         `The Kairos page does not clearly indicate the expected ${action} action.`
       );
@@ -174,7 +201,11 @@ export async function runKairosPunch({
     }
 
     if (dryRun) {
-      const screenshotPath = await saveScreenshot(page, artifactsDir, `${action}-dry-run`);
+      const screenshotPath = await saveScreenshot(
+        page,
+        artifactsDir,
+        buildArtifactLabel(action, "dry-run")
+      );
 
       return {
         action,
@@ -188,6 +219,7 @@ export async function runKairosPunch({
     await punchButton.click();
     await page.waitForLoadState("networkidle").catch(() => undefined);
     await maybeConfirmPunch(page);
+    await waitForPunchOutcome(page);
 
     const afterPunchText = await getBodyText(page);
 
@@ -199,15 +231,26 @@ export async function runKairosPunch({
       throw new Error("Kairos did not show a reliable success signal after the punch attempt.");
     }
 
+    const screenshotPath = await saveScreenshot(
+      page,
+      artifactsDir,
+      buildArtifactLabel(action, "success")
+    );
+
     return {
       action,
       dryRun: false,
       finalUrl: page.url(),
-      pageText: afterPunchText
+      pageText: afterPunchText,
+      screenshotPath
     };
   } catch (error) {
     const screenshotPath = page
-      ? await saveScreenshot(page, artifactsDir, `${action}-failure`)
+      ? await saveScreenshot(
+          page,
+          artifactsDir,
+          buildArtifactLabel(action, "failure")
+        )
       : undefined;
     const reason = error instanceof Error ? error.message : String(error);
     const screenshotMessage = screenshotPath
@@ -221,7 +264,38 @@ export async function runKairosPunch({
 }
 
 async function fillLoginForm(page: Page, email: string, password: string) {
-  const usernameInput = await findFirstVisible(page, [
+  const usernameInput = await getUsernameInput(page);
+
+  if (!usernameInput) {
+    throw new Error("Unable to find the Kairos username input.");
+  }
+
+  const passwordInput = await getPasswordInput(page);
+
+  if (!passwordInput) {
+    throw new Error("Unable to find the Kairos password input.");
+  }
+
+  await usernameInput.fill(email);
+  await passwordInput.fill(password);
+}
+
+async function inspectInlinePunchFormSignals(
+  page: Page
+): Promise<InlinePunchFormSignals> {
+  const emailField = await getUsernameInput(page);
+  const passwordField = await getPasswordInput(page);
+  const punchButton = await getDirectPunchButton(page);
+
+  return {
+    hasEmailField: emailField !== undefined,
+    hasPasswordField: passwordField !== undefined,
+    hasPunchButton: punchButton !== undefined
+  };
+}
+
+async function getUsernameInput(page: Page): Promise<Locator | undefined> {
+  return findFirstVisible(page, [
     (candidatePage) => candidatePage.getByPlaceholder(/e-mail|email/i),
     (candidatePage) => candidatePage.getByLabel(/e-mail|email|nome do usuario|usuario/i),
     (candidatePage) =>
@@ -233,23 +307,26 @@ async function fillLoginForm(page: Page, email: string, password: string) {
         'form input[name*="usuario" i], form input[id*="usuario" i], form input[name*="user" i], form input[id*="user" i]'
       )
   ]);
+}
 
-  if (!usernameInput) {
-    throw new Error("Unable to find the Kairos username input.");
-  }
-
-  const passwordInput = await findFirstVisible(page, [
+async function getPasswordInput(page: Page): Promise<Locator | undefined> {
+  return findFirstVisible(page, [
     (candidatePage) => candidatePage.getByPlaceholder(/senha|password/i),
     (candidatePage) => candidatePage.getByLabel(/senha|password/i),
     (candidatePage) => candidatePage.locator('form input[type="password"]')
   ]);
+}
 
-  if (!passwordInput) {
-    throw new Error("Unable to find the Kairos password input.");
-  }
-
-  await usernameInput.fill(email);
-  await passwordInput.fill(password);
+async function getDirectPunchButton(page: Page): Promise<Locator | undefined> {
+  return findFirstVisible(page, [
+    (candidatePage) =>
+      candidatePage.getByRole("button", { name: /marcar ponto|registrar ponto/i }),
+    (candidatePage) =>
+      candidatePage.locator(
+        'input[type="submit"][value*="Marcar" i], input[type="button"][value*="Marcar" i]'
+      ),
+    (candidatePage) => candidatePage.getByText(/marcar ponto/i)
+  ]);
 }
 
 async function findPunchButton(
@@ -380,26 +457,26 @@ async function saveScreenshot(
 
 async function redactSensitiveInputs(page: Page) {
   await page.evaluate(() => {
-    const selectors = [
-      'form input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
-      'input[type="password"]',
-      'input[type="email"]',
-      'input[placeholder*="mail" i]',
-      'input[placeholder*="senha" i]',
-      'input[aria-label*="mail" i]',
-      'input[aria-label*="senha" i]',
-      'input[name*="email" i]',
-      'input[id*="email" i]',
-      'input[name*="usuario" i]',
-      'input[id*="usuario" i]',
-      'input[name*="user" i]',
-      'input[id*="user" i]'
-    ];
+    const elements = document.querySelectorAll<HTMLInputElement>("input");
 
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll<HTMLInputElement>(selector);
+    for (const element of elements) {
+      const fingerprint = [
+        element.type,
+        element.name,
+        element.id,
+        element.placeholder,
+        element.getAttribute("aria-label") ?? ""
+      ]
+        .join(" ")
+        .toLowerCase();
+      const looksSensitive =
+        fingerprint.includes("mail") ||
+        fingerprint.includes("senha") ||
+        fingerprint.includes("password") ||
+        fingerprint.includes("usuario") ||
+        fingerprint.includes("user");
 
-      for (const element of elements) {
+      if (looksSensitive) {
         element.value = "";
       }
     }
@@ -449,6 +526,22 @@ async function maybeConfirmPunch(page: Page) {
 
   await confirmationButton.click();
   await page.waitForLoadState("networkidle").catch(() => undefined);
+}
+
+async function waitForPunchOutcome(page: Page) {
+  await page.waitForFunction(() => {
+    const text = document.body.innerText
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+
+    return (
+      text.includes("marcacao de ponto inserida com sucesso") ||
+      text.includes("comprovante de registro de ponto") ||
+      text.includes("usuario ou senha invalidos") ||
+      text.includes("erro ao registrar")
+    );
+  });
 }
 
 function normalizeText(value: string): string {

@@ -110,6 +110,32 @@ describe("pageShowsInlinePunchForm", () => {
   });
 });
 
+describe("inlinePunchFormSignalsPresent", () => {
+  test("accepts a direct form when email, password, and punch button are present", async () => {
+    const { inlinePunchFormSignalsPresent } = await loadKairosModule();
+
+    expect(
+      inlinePunchFormSignalsPresent({
+        hasEmailField: true,
+        hasPasswordField: true,
+        hasPunchButton: true
+      })
+    ).toBe(true);
+  });
+
+  test("rejects incomplete direct form signals", async () => {
+    const { inlinePunchFormSignalsPresent } = await loadKairosModule();
+
+    expect(
+      inlinePunchFormSignalsPresent({
+        hasEmailField: true,
+        hasPasswordField: false,
+        hasPunchButton: true
+      })
+    ).toBe(false);
+  });
+});
+
 describe("punchAppearsSuccessful", () => {
   test("accepts explicit success text after the click", async () => {
     const { punchAppearsSuccessful } = await loadKairosModule();
@@ -173,5 +199,19 @@ describe("pickConfirmationLabel", () => {
     const { pickConfirmationLabel } = await loadKairosModule();
 
     expect(pickConfirmationLabel(["Fechar", "Cancelar"])).toBeUndefined();
+  });
+});
+
+describe("buildArtifactLabel", () => {
+  test("uses a success suffix for successful punches", async () => {
+    const { buildArtifactLabel } = await loadKairosModule();
+
+    expect(buildArtifactLabel("clock-in", "success")).toBe("clock-in-success");
+  });
+
+  test("uses a dry-run suffix for dry runs", async () => {
+    const { buildArtifactLabel } = await loadKairosModule();
+
+    expect(buildArtifactLabel("clock-out", "dry-run")).toBe("clock-out-dry-run");
   });
 });
