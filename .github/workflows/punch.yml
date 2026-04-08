@@ -15,6 +15,11 @@ on:
         required: true
         default: false
         type: boolean
+      force_live:
+        description: Allow a live manual punch. Keep false unless you intentionally want a real punch now.
+        required: true
+        default: false
+        type: boolean
   schedule:
     - cron: "57 9 * * 1-5"
       timezone: "America/Sao_Paulo"
@@ -36,12 +41,12 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Install npm dependencies
@@ -56,13 +61,14 @@ jobs:
           GITHUB_EVENT_SCHEDULE: ${{ github.event.schedule || '' }}
           INPUT_ACTION: ${{ github.event.inputs.action || '' }}
           INPUT_DRY_RUN: ${{ github.event.inputs.dry_run || 'false' }}
+          INPUT_FORCE_LIVE: ${{ github.event.inputs.force_live || 'false' }}
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
         run: npm run punch
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kairos-artifacts-${{ github.run_id }}
           path: artifacts

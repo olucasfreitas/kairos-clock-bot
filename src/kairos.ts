@@ -59,6 +59,10 @@ export function pageTextSupportsAction(
   action: PunchAction,
   pageText: string
 ): boolean {
+  if (pageShowsInlinePunchForm(pageText)) {
+    return true;
+  }
+
   const normalizedPageText = normalizeText(pageText);
   const expected = ACTION_SPECIFIC_KEYWORDS[action].some((keyword) =>
     normalizedPageText.includes(normalizeText(keyword))
@@ -69,6 +73,16 @@ export function pageTextSupportsAction(
   );
 
   return expected && !opposite;
+}
+
+export function pageShowsInlinePunchForm(pageText: string): boolean {
+  const normalizedPageText = normalizeText(pageText);
+
+  return (
+    normalizedPageText.includes("marcar ponto") &&
+    (normalizedPageText.includes("e-mail") || normalizedPageText.includes("email")) &&
+    normalizedPageText.includes("senha")
+  );
 }
 
 export function punchAppearsSuccessful(
@@ -139,19 +153,6 @@ export async function runKairosPunch({
     page.setDefaultTimeout(timeoutMs);
 
     await page.goto(KAIROS_PUNCH_URL, { waitUntil: "domcontentloaded" });
-
-    if (!(await hasVisibleLoginForm(page))) {
-      await page.goto(KAIROS_LOGIN_URL, { waitUntil: "domcontentloaded" });
-    }
-
-    await fillLoginForm(page, email, password);
-    await submitLogin(page);
-    await page.goto(KAIROS_PUNCH_URL, { waitUntil: "domcontentloaded" });
-
-    if (await hasVisibleLoginForm(page)) {
-      throw new Error("Kairos login did not complete successfully.");
-    }
-
     const beforePunchText = await getBodyText(page);
 
     if (!pageTextSupportsAction(action, beforePunchText)) {
@@ -159,6 +160,8 @@ export async function runKairosPunch({
         `The Kairos page does not clearly indicate the expected ${action} action.`
       );
     }
+
+    await fillLoginForm(page, email, password);
 
     const punchButton = await findPunchButton(page, action);
 
@@ -183,10 +186,6 @@ export async function runKairosPunch({
     await maybeConfirmPunch(page);
 
     const afterPunchText = await getBodyText(page);
-
-    if (await hasVisibleLoginForm(page)) {
-      throw new Error("Kairos returned to the login screen after the punch attempt.");
-    }
 
     if (looksLikeErrorState(afterPunchText)) {
       throw new Error("Kairos displayed an error after the punch attempt.");
@@ -218,20 +217,28 @@ export async function runKairosPunch({
 }
 
 async function fillLoginForm(page: Page, email: string, password: string) {
-  const usernameInput = await findUniqueVisible(page, [
-    'form input[type="email"]',
-    'form input[autocomplete="username"]',
-    'form input[name*="usuario" i], form input[id*="usuario" i], form input[name*="user" i], form input[id*="user" i]',
-    'form input:not([type="password"]):not([type="hidden"]):not([disabled])'
-  ], "Kairos username input");
+  const usernameInput = await findFirstVisible(page, [
+    (candidatePage) => candidatePage.getByPlaceholder(/e-mail|email/i),
+    (candidatePage) => candidatePage.getByLabel(/e-mail|email|nome do usuario|usuario/i),
+    (candidatePage) =>
+      candidatePage.locator(
+        'form input[name*="email" i], form input[id*="email" i], form input[type="email"]'
+      ),
+    (candidatePage) =>
+      candidatePage.locator(
+        'form input[name*="usuario" i], form input[id*="usuario" i], form input[name*="user" i], form input[id*="user" i]'
+      )
+  ]);
 
   if (!usernameInput) {
     throw new Error("Unable to find the Kairos username input.");
   }
 
-  const passwordInput = await findUniqueVisible(page, [
-    'form input[type="password"]'
-  ], "Kairos password input");
+  const passwordInput = await findFirstVisible(page, [
+    (candidatePage) => candidatePage.getByPlaceholder(/senha|password/i),
+    (candidatePage) => candidatePage.getByLabel(/senha|password/i),
+    (candidatePage) => candidatePage.locator('form input[type="password"]')
+  ]);
 
   if (!passwordInput) {
     throw new Error("Unable to find the Kairos password input.");
@@ -239,20 +246,6 @@ async function fillLoginForm(page: Page, email: string, password: string) {
 
   await usernameInput.fill(email);
   await passwordInput.fill(password);
-}
-
-async function submitLogin(page: Page) {
-  const submitButton = await findUniqueVisible(page, [
-    'form button[type="submit"], form input[type="submit"]',
-    "form button"
-  ], "Kairos login button");
-
-  if (!submitButton) {
-    throw new Error("Unable to find the Kairos login button.");
-  }
-
-  await submitButton.click();
-  await page.waitForLoadState("networkidle").catch(() => undefined);
 }
 
 async function findPunchButton(
@@ -285,15 +278,6 @@ async function findPunchButton(
   return genericMatches[0];
 }
 
-async function hasVisibleLoginForm(page: Page): Promise<boolean> {
-  const passwordField = page.locator('input[type="password"]').first();
-
-  return (
-    (await passwordField.count()) > 0 &&
-    (await passwordField.isVisible().catch(() => false))
-  );
-}
-
 async function findFirstVisible(
   page: Page,
   factories: ReadonlyArray<(page: Page) => Locator>
@@ -307,26 +291,6 @@ async function findFirstVisible(
 
     if (await locator.isVisible().catch(() => false)) {
       return locator;
-    }
-  }
-
-  return undefined;
-}
-
-async function findUniqueVisible(
-  page: Page,
-  selectors: readonly string[],
-  label: string
-): Promise<Locator | undefined> {
-  for (const selector of selectors) {
-    const matches = await collectVisibleLocators(page.locator(selector));
-
-    if (matches.length > 1) {
-      throw new Error(`Found multiple candidates for ${label}.`);
-    }
-
-    if (matches.length === 1) {
-      return matches[0];
     }
   }
 
@@ -400,6 +364,7 @@ async function saveScreenshot(
   label: string
 ): Promise<string> {
   await mkdir(artifactsDir, { recursive: true });
+  await redactSensitiveInputs(page);
 
   const fileName = `${label}-${new Date().toISOString().replaceAll(":", "-")}.png`;
   const screenshotPath = path.join(artifactsDir, fileName);
@@ -407,6 +372,34 @@ async function saveScreenshot(
   await page.screenshot({ fullPage: true, path: screenshotPath });
 
   return screenshotPath;
+}
+
+async function redactSensitiveInputs(page: Page) {
+  await page.evaluate(() => {
+    const selectors = [
+      'form input:not([type="hidden"]):not([type="submit"]):not([type="button"])',
+      'input[type="password"]',
+      'input[type="email"]',
+      'input[placeholder*="mail" i]',
+      'input[placeholder*="senha" i]',
+      'input[aria-label*="mail" i]',
+      'input[aria-label*="senha" i]',
+      'input[name*="email" i]',
+      'input[id*="email" i]',
+      'input[name*="usuario" i]',
+      'input[id*="usuario" i]',
+      'input[name*="user" i]',
+      'input[id*="user" i]'
+    ];
+
+    for (const selector of selectors) {
+      const elements = document.querySelectorAll<HTMLInputElement>(selector);
+
+      for (const element of elements) {
+        element.value = "";
+      }
+    }
+  }).catch(() => undefined);
 }
 
 function looksLikeErrorState(pageText: string): boolean {

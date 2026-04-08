@@ -27,6 +27,28 @@ describe("getActionKeywords", () => {
 });
 
 describe("pageTextSupportsAction", () => {
+  test("accepts the inline marcacao form for clock-in", async () => {
+    const { pageTextSupportsAction } = await loadKairosModule();
+
+    expect(
+      pageTextSupportsAction(
+        "clock-in",
+        "E-mail\nSenha\n08-04-2026 16:55:00\nHorario de Brasilia\nMarcar ponto\nIniciar sessao"
+      )
+    ).toBe(true);
+  });
+
+  test("accepts the inline marcacao form for clock-out", async () => {
+    const { pageTextSupportsAction } = await loadKairosModule();
+
+    expect(
+      pageTextSupportsAction(
+        "clock-out",
+        "E-mail\nSenha\n08-04-2026 16:55:00\nHorario de Brasilia\nMarcar ponto\nIniciar sessao"
+      )
+    ).toBe(true);
+  });
+
   test("accepts entry text for clock-in runs", async () => {
     const { pageTextSupportsAction } = await loadKairosModule();
 
@@ -48,6 +70,24 @@ describe("pageTextSupportsAction", () => {
     const { pageTextSupportsAction } = await loadKairosModule();
 
     expect(pageTextSupportsAction("clock-out", "Marcar ponto")).toBe(false);
+  });
+});
+
+describe("pageShowsInlinePunchForm", () => {
+  test("recognizes the direct marcacao form", async () => {
+    const { pageShowsInlinePunchForm } = await loadKairosModule();
+
+    expect(
+      pageShowsInlinePunchForm(
+        "E-mail\nSenha\n08-04-2026 16:55:00\nHorario de Brasilia\nMarcar ponto\nIniciar sessao"
+      )
+    ).toBe(true);
+  });
+
+  test("does not treat a bare generic label as a complete form", async () => {
+    const { pageShowsInlinePunchForm } = await loadKairosModule();
+
+    expect(pageShowsInlinePunchForm("Marcar ponto")).toBe(false);
   });
 });
 

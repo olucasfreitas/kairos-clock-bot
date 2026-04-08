@@ -21,6 +21,7 @@ export interface RuntimeOptions {
   dryRun: boolean;
   email: string;
   enforceScheduleWindow: boolean;
+  eventName: string;
   headless: boolean;
   password: string;
   timeoutMs: number;
@@ -29,8 +30,11 @@ export interface RuntimeOptions {
 export function resolveRuntimeOptions(
   env: NodeJS.ProcessEnv = process.env
 ): RuntimeOptions {
+  const eventName = env.GITHUB_EVENT_NAME?.trim() || "workflow_dispatch";
   const action = resolveAction(env);
   const dryRun = parseBoolean(env.INPUT_DRY_RUN ?? env.DRY_RUN);
+  const forceLive = parseBoolean(env.INPUT_FORCE_LIVE);
+  const runAttempt = parsePositiveInteger(env.GITHUB_RUN_ATTEMPT, 1);
   const email = env.KAIROS_EMAIL?.trim();
   const password = env.KAIROS_PASSWORD?.trim();
 
@@ -38,12 +42,23 @@ export function resolveRuntimeOptions(
     throw new Error("KAIROS_EMAIL and KAIROS_PASSWORD must both be configured.");
   }
 
+  if (eventName === "workflow_dispatch" && !dryRun && !forceLive) {
+    throw new Error(
+      "Live workflow_dispatch runs require INPUT_FORCE_LIVE=true to avoid accidental punches."
+    );
+  }
+
+  if (!dryRun && runAttempt > 1) {
+    throw new Error("Refusing to execute a live rerun attempt.");
+  }
+
   return {
     action,
     artifactsDir: env.ARTIFACTS_DIR?.trim() || "artifacts",
     dryRun,
     email,
-    enforceScheduleWindow: env.GITHUB_EVENT_NAME === "schedule" && !dryRun,
+    enforceScheduleWindow: eventName === "schedule" && !dryRun,
+    eventName,
     headless: !parseBoolean(env.HEADFUL),
     password,
     timeoutMs: parsePositiveInteger(env.KAIROS_TIMEOUT_MS, 30_000)

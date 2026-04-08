@@ -55,6 +55,50 @@ describe("resolveRuntimeOptions", () => {
     expect(result.enforceScheduleWindow).toBe(false);
   });
 
+  test("rejects live workflow dispatch runs unless explicitly forced", async () => {
+    const { resolveRuntimeOptions } = await loadIndexModule();
+
+    expect(() =>
+      resolveRuntimeOptions({
+        GITHUB_EVENT_NAME: "workflow_dispatch",
+        INPUT_ACTION: "clock-in",
+        INPUT_DRY_RUN: "false",
+        KAIROS_EMAIL: "user@example.com",
+        KAIROS_PASSWORD: "super-secret"
+      })
+    ).toThrow(/force_live/i);
+  });
+
+  test("allows live workflow dispatch runs when force_live is true", async () => {
+    const { resolveRuntimeOptions } = await loadIndexModule();
+
+    const result = resolveRuntimeOptions({
+      GITHUB_EVENT_NAME: "workflow_dispatch",
+      INPUT_ACTION: "clock-in",
+      INPUT_DRY_RUN: "false",
+      INPUT_FORCE_LIVE: "true",
+      KAIROS_EMAIL: "user@example.com",
+      KAIROS_PASSWORD: "super-secret"
+    });
+
+    expect(result.action).toBe("clock-in");
+    expect(result.dryRun).toBe(false);
+  });
+
+  test("rejects reruns of live attempts", async () => {
+    const { resolveRuntimeOptions } = await loadIndexModule();
+
+    expect(() =>
+      resolveRuntimeOptions({
+        GITHUB_EVENT_NAME: "schedule",
+        GITHUB_EVENT_SCHEDULE: "57 9 * * 1-5",
+        GITHUB_RUN_ATTEMPT: "2",
+        KAIROS_EMAIL: "user@example.com",
+        KAIROS_PASSWORD: "super-secret"
+      })
+    ).toThrow(/rerun/i);
+  });
+
   test("throws when credentials are missing", async () => {
     const { resolveRuntimeOptions } = await loadIndexModule();
 
