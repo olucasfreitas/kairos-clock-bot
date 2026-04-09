@@ -2,9 +2,11 @@ import { chromium } from "playwright";
 
 const KAIROS_URL =
   "https://www.dimepkairos.com.br/Dimep/Account/Marcacao";
+const DEFAULT_TIMEOUT_MS = 30_000;
+const SUCCESS_TIMEOUT_MS = 15_000;
 const SUCCESS_TEXT = "marcacao de ponto inserida com sucesso";
 
-export async function punch(email: string, password: string): Promise<void> {
+export async function punch(email, password) {
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -12,8 +14,8 @@ export async function punch(email: string, password: string): Promise<void> {
       locale: "pt-BR",
       timezoneId: "America/Sao_Paulo"
     });
-    page.setDefaultTimeout(30_000);
 
+    page.setDefaultTimeout(DEFAULT_TIMEOUT_MS);
     await page.goto(KAIROS_URL, { waitUntil: "domcontentloaded" });
 
     const emailInput = page.getByPlaceholder(/e-?mail/i).first();
@@ -29,21 +31,18 @@ export async function punch(email: string, password: string): Promise<void> {
       .first();
     await punchButton.waitFor({ state: "visible" });
 
+    // Kairos currently confirms the punch by returning the final Marcacao HTML document.
     const marcacaoResponsePromise = page.waitForResponse(
-      (response) => {
-        return (
-          response.status() === 200 &&
-          response.request().resourceType() === "document" &&
-          response.url().toLowerCase().includes("/dimep/account/marcacao")
-        );
-      },
-      { timeout: 15_000 }
+      (response) =>
+        response.status() === 200 &&
+        response.request().resourceType() === "document" &&
+        response.url().toLowerCase().includes("/dimep/account/marcacao"),
+      { timeout: SUCCESS_TIMEOUT_MS }
     );
 
     await punchButton.click();
 
     const marcacaoResponse = await marcacaoResponsePromise;
-
     const marcacaoHtml = normalizeText(await marcacaoResponse.text());
 
     if (!marcacaoHtml.includes(SUCCESS_TEXT)) {
@@ -51,22 +50,22 @@ export async function punch(email: string, password: string): Promise<void> {
     }
 
     await page.waitForFunction(
-      () => {
-        return document.body.innerText
+      (expectedText) =>
+        document.body.innerText
           .normalize("NFD")
           .replace(/\p{Diacritic}/gu, "")
           .replace(/\s+/g, " ")
           .toLowerCase()
-          .includes("marcacao de ponto inserida com sucesso");
-      },
-      { timeout: 15_000 }
+          .includes(expectedText),
+      SUCCESS_TEXT,
+      { timeout: SUCCESS_TIMEOUT_MS }
     );
   } finally {
     await browser.close();
   }
 }
 
-function normalizeText(value: string): string {
+function normalizeText(value) {
   return value
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")

@@ -11,7 +11,10 @@ on:
 permissions: {}
 
 env:
+  # Opt JavaScript-based GitHub actions into Node 24 before the platform default flips.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # Keep native Date handling aligned with the Kairos BRT schedule during workflow execution.
+  TZ: America/Sao_Paulo
 
 concurrency:
   group: kairos-punch
@@ -34,7 +37,7 @@ jobs:
       - run: npm ci
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
@@ -63,3 +66,9 @@ jobs:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
         run: npm run punch
+
+      - name: Fail on unexpected schedule selector
+        if: github.event_name == 'schedule' && github.event.schedule != '58 9 * * 1-5' && github.event.schedule != '58 18 * * 1-5'
+        run: |
+          echo "Unexpected github.event.schedule: ${{ github.event.schedule }}"
+          exit 1

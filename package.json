@@ -5,23 +5,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "punch": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "check": "node --check src/calendar.js && node --check src/index.js && node --check src/kairos.js",
+    "punch": "node src/index.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
-    "luxon": "^3.7.2",
     "playwright": "^1.59.1"
-  },
-  "devDependencies": {
-    "@types/luxon": "^3.7.1",
-    "@types/node": "^25.5.2",
-    "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
   }
 }

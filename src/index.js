@@ -1,25 +1,26 @@
 import { fileURLToPath } from "node:url";
 
-import { DateTime } from "luxon";
-
 import holidays from "../config/holidays-2026.json" with { type: "json" };
 import {
   BRAZIL_TZ,
+  HOLIDAY_YEAR,
+  formatTimestamp,
   msUntilTarget,
   shouldSkipToday,
-  targetDateTime,
-  type TargetSlot
-} from "./calendar.ts";
-import { punch } from "./kairos.ts";
+  targetDateTime
+} from "./calendar.js";
+import { punch } from "./kairos.js";
 
-async function main() {
+const SCHEDULE_LATENESS_LIMIT_MS = 60_000;
+
+export async function main() {
   const argv = process.argv.slice(2);
   const isScheduled = argv.includes("--schedule");
   const targetSlot = parseTargetSlot(argv);
-  const now = DateTime.now().setZone(BRAZIL_TZ);
+  const now = new Date();
 
   console.log(
-    `[kairos] mode=${isScheduled ? "schedule" : "manual"} time=${now.toISO()}`
+    `[kairos] mode=${isScheduled ? "schedule" : "manual"} time=${formatTimestamp(now)} ${BRAZIL_TZ}`
   );
 
   if (isScheduled) {
@@ -29,7 +30,7 @@ async function main() {
       );
     }
 
-    if (now.year !== 2026) {
+    if (now.getFullYear() !== HOLIDAY_YEAR) {
       throw new Error(
         "Scheduled mode currently only has holiday data for 2026. Update config/holidays-2026.json before using it in another year."
       );
@@ -43,13 +44,11 @@ async function main() {
     }
 
     const target = targetDateTime(now, targetSlot);
-    const latenessMs = Math.max(0, Math.round(now.diff(target).as("milliseconds")));
+    const latenessMs = Math.max(0, now.getTime() - target.getTime());
 
-    if (latenessMs > 60_000) {
+    if (latenessMs > SCHEDULE_LATENESS_LIMIT_MS) {
       console.log(
-        `[kairos] Skipping: missed ${targetSlot} target by ${Math.round(
-          latenessMs / 1000
-        )}s.`
+        `[kairos] Skipping: missed ${targetSlot} target by ${Math.round(latenessMs / 1000)}s.`
       );
       return;
     }
@@ -58,9 +57,9 @@ async function main() {
 
     if (waitMs > 0) {
       console.log(
-        `[kairos] Waiting ${Math.round(waitMs / 1000)}s until ${target.toISO()}.`
+        `[kairos] Waiting ${Math.round(waitMs / 1000)}s until ${formatTimestamp(target)} ${BRAZIL_TZ}.`
       );
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      await sleep(waitMs);
     }
   }
 
@@ -88,7 +87,7 @@ if (isDirectExecution) {
   });
 }
 
-function parseTargetSlot(argv: string[]): TargetSlot | undefined {
+function parseTargetSlot(argv) {
   const index = argv.indexOf("--target-slot");
 
   if (index === -1) {
@@ -102,4 +101,8 @@ function parseTargetSlot(argv: string[]): TargetSlot | undefined {
   }
 
   throw new Error("--target-slot must be either morning or evening.");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
