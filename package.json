@@ -4,14 +4,9 @@
   "description": "Automated Kairos clock-in and clock-out workflow.",
   "private": true,
   "type": "module",
-  "main": "dist/index.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dry-run:clock-in": "tsx src/index.ts --execution-mode local --dry-run --action clock-in",
-    "dry-run:clock-out": "tsx src/index.ts --execution-mode local --dry-run --action clock-out",
     "punch": "tsx src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "keywords": [],

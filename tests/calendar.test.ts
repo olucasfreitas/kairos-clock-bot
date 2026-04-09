@@ -1,126 +1,57 @@
 import { DateTime } from "luxon";
 import { describe, expect, test } from "vitest";
 
-import holidays2026 from "../config/holidays-2026.json" with { type: "json" };
+import holidays from "../config/holidays-2026.json" with { type: "json" };
+import { msUntilTarget, shouldSkipToday } from "../src/calendar.ts";
 
-async function loadCalendarModule() {
-  const calendarModule = await import("../src/calendar.ts").catch(() => undefined);
-
-  expect(calendarModule).toBeDefined();
-
-  return calendarModule!;
-}
-
-describe("buildPunchDecision", () => {
-  test("skips weekends in Sao Paulo time", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-in",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-01-24T09:57:00", {
-        zone: "America/Sao_Paulo"
-      })
+describe("shouldSkipToday", () => {
+  test("skips weekends", () => {
+    const saturday = DateTime.fromISO("2026-01-24T09:57:00", {
+      zone: "America/Sao_Paulo"
     });
 
-    expect(result.shouldSkip).toBe(true);
-    expect(result.skipReason).toBe("weekend");
-    expect(result.localDate).toBe("2026-01-24");
+    expect(shouldSkipToday(saturday, holidays)).toBe("weekend");
   });
 
-  test("skips configured holidays even on weekdays", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-out",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-11-20T18:57:00", {
-        zone: "America/Sao_Paulo"
-      })
+  test("skips holidays", () => {
+    const holiday = DateTime.fromISO("2026-11-20T09:57:00", {
+      zone: "America/Sao_Paulo"
     });
 
-    expect(result.shouldSkip).toBe(true);
-    expect(result.skipReason).toBe("holiday");
-    expect(result.localDate).toBe("2026-11-20");
+    expect(shouldSkipToday(holiday, holidays)).toBe("holiday");
   });
 
-  test("waits until 10am BRT for clock-in runs", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-in",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-04-08T09:57:00", {
-        zone: "America/Sao_Paulo"
-      })
+  test("does not skip regular weekdays", () => {
+    const weekday = DateTime.fromISO("2026-04-08T09:57:00", {
+      zone: "America/Sao_Paulo"
     });
 
-    expect(result.shouldSkip).toBe(false);
-    expect(result.targetIso).toBe("2026-04-08T10:00:00.000-03:00");
-    expect(result.waitMs).toBe(180000);
+    expect(shouldSkipToday(weekday, holidays)).toBeUndefined();
+  });
+});
+
+describe("msUntilTarget", () => {
+  test("waits until 10:00 for morning runs", () => {
+    const morning = DateTime.fromISO("2026-04-08T09:57:00", {
+      zone: "America/Sao_Paulo"
+    });
+
+    expect(msUntilTarget(morning)).toBe(180_000);
   });
 
-  test("does not wait when the runner starts a few minutes after the target time", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-in",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-04-08T10:03:30", {
-        zone: "America/Sao_Paulo"
-      })
+  test("waits until 19:00 for evening runs", () => {
+    const evening = DateTime.fromISO("2026-04-08T18:57:00", {
+      zone: "America/Sao_Paulo"
     });
 
-    expect(result.shouldSkip).toBe(false);
-    expect(result.targetIso).toBe("2026-04-08T10:00:00.000-03:00");
-    expect(result.waitMs).toBe(0);
+    expect(msUntilTarget(evening)).toBe(180_000);
   });
 
-  test("skips a run that starts too late", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-in",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-04-08T10:07:00", {
-        zone: "America/Sao_Paulo"
-      })
+  test("returns 0 when past target time", () => {
+    const late = DateTime.fromISO("2026-04-08T10:03:00", {
+      zone: "America/Sao_Paulo"
     });
 
-    expect(result.shouldSkip).toBe(true);
-    expect(result.skipReason).toBe("missed-window");
-    expect(result.waitMs).toBe(0);
-  });
-
-  test("allows a late manual retry when lateness enforcement is disabled", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-in",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-04-08T10:07:00", {
-        zone: "America/Sao_Paulo"
-      }),
-      enforceLatenessWindow: false
-    });
-
-    expect(result.shouldSkip).toBe(false);
-    expect(result.waitMs).toBe(0);
-  });
-
-  test("targets 7pm BRT for clock-out runs", async () => {
-    const { buildPunchDecision } = await loadCalendarModule();
-
-    const result = buildPunchDecision({
-      action: "clock-out",
-      holidays: holidays2026,
-      now: DateTime.fromISO("2026-04-08T18:57:00", {
-        zone: "America/Sao_Paulo"
-      })
-    });
-
-    expect(result.shouldSkip).toBe(false);
-    expect(result.targetIso).toBe("2026-04-08T19:00:00.000-03:00");
-    expect(result.waitMs).toBe(180000);
+    expect(msUntilTarget(late)).toBe(0);
   });
 });

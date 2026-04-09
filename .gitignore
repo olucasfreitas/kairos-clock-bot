@@ -1,9 +1,7 @@
-artifacts/
 dist/
 .env
 .env.*
 !.env.example
-.run-artifacts/
 node_modules/
 playwright/.local-browsers/
 playwright-report/
