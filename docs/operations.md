@@ -9,12 +9,6 @@ gh secret set KAIROS_EMAIL
 gh secret set KAIROS_PASSWORD
 ```
 
-### Enable scheduled runs
-
-```bash
-gh variable set KAIROS_AUTOMATION_ENABLED -b true
-```
-
 ## How it works
 
 - **Scheduled**: Starts at 09:58 and 18:58 BRT, finishes setup, then waits until 10:00 / 19:00 before punching. Monday to Friday only, skips holidays.
@@ -24,12 +18,6 @@ gh variable set KAIROS_AUTOMATION_ENABLED -b true
 
 ```bash
 gh workflow run punch.yml
-```
-
-## Disable scheduled runs
-
-```bash
-gh variable set KAIROS_AUTOMATION_ENABLED -b false
 ```
 
 ## Notes
