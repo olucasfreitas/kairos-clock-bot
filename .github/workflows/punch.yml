@@ -3,9 +3,9 @@ name: Kairos Punch
 on:
   workflow_dispatch:
   schedule:
-    - cron: "58 9 * * 1-5"
+    - cron: "0 10 * * 1-5"
       timezone: "America/Sao_Paulo"
-    - cron: "58 18 * * 1-5"
+    - cron: "0 19 * * 1-5"
       timezone: "America/Sao_Paulo"
 
 permissions: {}
@@ -46,29 +46,16 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
 
-      - name: Punch morning schedule
-        if: github.event_name == 'schedule' && github.event.schedule == '58 9 * * 1-5'
+      - name: Punch (schedule)
+        if: github.event_name == 'schedule'
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- --schedule --target-slot morning
+        run: npm run punch -- --schedule
 
-      - name: Punch evening schedule
-        if: github.event_name == 'schedule' && github.event.schedule == '58 18 * * 1-5'
-        env:
-          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
-          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- --schedule --target-slot evening
-
-      - name: Punch manually
+      - name: Punch (manual)
         if: github.event_name == 'workflow_dispatch'
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
         run: npm run punch
-
-      - name: Fail on unexpected schedule selector
-        if: github.event_name == 'schedule' && github.event.schedule != '58 9 * * 1-5' && github.event.schedule != '58 18 * * 1-5'
-        run: |
-          echo "Unexpected github.event.schedule: ${{ github.event.schedule }}"
-          exit 1
