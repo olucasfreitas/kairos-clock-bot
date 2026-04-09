@@ -3,9 +3,9 @@ name: Kairos Punch
 on:
   workflow_dispatch:
   schedule:
-    - cron: "57 9 * * 1-5"
+    - cron: "59 9 * * 1-5"
       timezone: "America/Sao_Paulo"
-    - cron: "57 18 * * 1-5"
+    - cron: "59 18 * * 1-5"
       timezone: "America/Sao_Paulo"
 
 concurrency:
@@ -16,7 +16,7 @@ jobs:
   punch:
     if: github.event_name == 'workflow_dispatch' || vars.KAIROS_AUTOMATION_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
 
     steps:
       - uses: actions/checkout@v6

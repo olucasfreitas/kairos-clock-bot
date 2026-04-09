@@ -17,7 +17,7 @@ gh variable set KAIROS_AUTOMATION_ENABLED -b true
 
 ## How it works
 
-- **Scheduled**: Runs at 10:00 and 19:00 BRT, Monday to Friday. Skips weekends and configured holidays.
+- **Scheduled**: Starts at 09:59 and 18:59 BRT, waits in-process until 10:00 / 19:00, then punches. Monday to Friday only, skips holidays.
 - **Manual**: Click "Run workflow" in GitHub Actions. Punches immediately. Always takes priority over scheduled runs.
 
 ## Manual trigger
