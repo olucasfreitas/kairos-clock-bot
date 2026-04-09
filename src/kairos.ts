@@ -32,7 +32,6 @@ export async function punch(email: string, password: string): Promise<void> {
     const marcacaoResponsePromise = page.waitForResponse(
       (response) => {
         return (
-          response.status() === 200 &&
           response.request().resourceType() === "document" &&
           response.url().toLowerCase().includes("/dimep/account/marcacao")
         );
