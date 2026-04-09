@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 
 export const BRAZIL_TZ = "America/Sao_Paulo";
+export type TargetSlot = "morning" | "evening";
 
 export function shouldSkipToday(
   now: DateTime,
@@ -15,9 +16,14 @@ export function shouldSkipToday(
   return undefined;
 }
 
-export function msUntilTarget(now: DateTime): number {
-  const hour = now.hour < 14 ? 10 : 19;
-  const target = now.set({ hour, minute: 0, second: 0, millisecond: 0 });
+export function targetDateTime(now: DateTime, targetSlot: TargetSlot): DateTime {
+  const hour = targetSlot === "morning" ? 10 : 19;
+
+  return now.set({ hour, minute: 0, second: 0, millisecond: 0 });
+}
+
+export function msUntilTarget(now: DateTime, targetSlot: TargetSlot): number {
+  const target = targetDateTime(now, targetSlot);
 
   return Math.max(0, Math.round(target.diff(now).as("milliseconds")));
 }

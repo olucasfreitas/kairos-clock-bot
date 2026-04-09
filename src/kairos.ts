@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 
 const KAIROS_URL =
   "https://www.dimepkairos.com.br/Dimep/Account/Marcacao";
+const SUCCESS_TEXT = "marcacao de ponto inserida com sucesso";
 
 export async function punch(email: string, password: string): Promise<void> {
   const browser = await chromium.launch({ headless: true });
@@ -27,13 +28,39 @@ export async function punch(email: string, password: string): Promise<void> {
       .getByRole("button", { name: /marcar ponto/i })
       .first();
     await punchButton.waitFor({ state: "visible" });
+
+    const marcacaoResponsePromise = page.waitForResponse(
+      (response) => {
+        return (
+          response.request().resourceType() === "document" &&
+          response.url().toLowerCase().includes("/dimep/account/marcacao")
+        );
+      },
+      { timeout: 15_000 }
+    );
+
     await punchButton.click();
+
+    const marcacaoResponse = await marcacaoResponsePromise;
+
+    if (!marcacaoResponse.ok()) {
+      throw new Error(
+        `Kairos Marcacao request failed with status ${marcacaoResponse.status()}.`
+      );
+    }
+
+    const marcacaoHtml = normalizeText(await marcacaoResponse.text());
+
+    if (!marcacaoHtml.includes(SUCCESS_TEXT)) {
+      throw new Error("Kairos Marcacao response did not confirm the punch.");
+    }
 
     await page.waitForFunction(
       () => {
         return document.body.innerText
           .normalize("NFD")
           .replace(/\p{Diacritic}/gu, "")
+          .replace(/\s+/g, " ")
           .toLowerCase()
           .includes("marcacao de ponto inserida com sucesso");
       },
@@ -42,4 +69,12 @@ export async function punch(email: string, password: string): Promise<void> {
   } finally {
     await browser.close();
   }
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 }

@@ -3,16 +3,16 @@ name: Kairos Punch
 on:
   workflow_dispatch:
   schedule:
-    - cron: "59 9 * * 1-5"
+    - cron: "58 9 * * 1-5"
       timezone: "America/Sao_Paulo"
-    - cron: "59 18 * * 1-5"
+    - cron: "58 18 * * 1-5"
       timezone: "America/Sao_Paulo"
 
 permissions: {}
 
 concurrency:
   group: kairos-punch
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
 
 jobs:
   punch:
@@ -32,8 +32,23 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
 
-      - name: Punch
+      - name: Punch morning schedule
+        if: github.event_name == 'schedule' && github.event.schedule == '58 9 * * 1-5'
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- ${{ github.event_name == 'schedule' && '--schedule' || '' }}
+        run: npm run punch -- --schedule --target-slot morning
+
+      - name: Punch evening schedule
+        if: github.event_name == 'schedule' && github.event.schedule == '58 18 * * 1-5'
+        env:
+          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
+          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
+        run: npm run punch -- --schedule --target-slot evening
+
+      - name: Punch manually
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
+          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
+        run: npm run punch
