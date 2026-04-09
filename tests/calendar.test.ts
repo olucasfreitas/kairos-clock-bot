@@ -5,12 +5,20 @@ import holidays from "../config/holidays-2026.json" with { type: "json" };
 import { msUntilTarget, shouldSkipToday } from "../src/calendar.ts";
 
 describe("shouldSkipToday", () => {
-  test("skips weekends", () => {
+  test("skips saturdays", () => {
     const saturday = DateTime.fromISO("2026-01-24T09:57:00", {
       zone: "America/Sao_Paulo"
     });
 
     expect(shouldSkipToday(saturday, holidays)).toBe("weekend");
+  });
+
+  test("skips sundays", () => {
+    const sunday = DateTime.fromISO("2026-01-25T09:57:00", {
+      zone: "America/Sao_Paulo"
+    });
+
+    expect(shouldSkipToday(sunday, holidays)).toBe("weekend");
   });
 
   test("skips holidays", () => {

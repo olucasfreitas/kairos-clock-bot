@@ -1,7 +1,7 @@
 {
   "name": "kairos-clock-bot",
   "version": "1.0.0",
-  "description": "Automated Kairos clock-in and clock-out workflow.",
+  "description": "Automated Kairos punch clock.",
   "private": true,
   "type": "module",
   "scripts": {

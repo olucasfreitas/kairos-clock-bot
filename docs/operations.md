@@ -26,8 +26,15 @@ gh variable set KAIROS_AUTOMATION_ENABLED -b true
 gh workflow run punch.yml
 ```
 
+## Disable scheduled runs
+
+```bash
+gh variable set KAIROS_AUTOMATION_ENABLED -b false
+```
+
 ## Notes
 
 - Manual triggers always cancel any pending scheduled run so they execute immediately.
 - Holidays are configured in `config/holidays-2026.json`.
 - Success is confirmed by the Kairos success message. Kairos sends email confirmations separately.
+- If the job fails, the Kairos email confirmation won't arrive. GitHub can notify on workflow failures if repository notification settings are enabled.
