@@ -11,7 +11,7 @@ gh secret set KAIROS_PASSWORD
 
 ## How it works
 
-- **Scheduled**: Runs at 10:00 and 19:00 BRT, Monday to Friday, skipping holidays. The cron fires at the target time and the script punches as soon as setup completes.
+- **Scheduled**: The workflow fires at 09:45 and 18:45 BRT to absorb GitHub Actions scheduling delays, then the script waits in-process until exactly 10:00 / 19:00 before punching. Monday to Friday only, skips holidays.
 - **Manual**: Click "Run workflow" in GitHub Actions. Punches immediately. Manual runs cancel any in-progress scheduled run and take priority.
 
 ## Manual trigger

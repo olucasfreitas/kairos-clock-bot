@@ -5,12 +5,14 @@ import {
   BRAZIL_TZ,
   HOLIDAY_YEAR,
   formatTimestamp,
+  msUntilHour,
   shouldSkipToday
 } from "./calendar.js";
 import { punch } from "./kairos.js";
 
 export async function main() {
   const isScheduled = process.argv.includes("--schedule");
+  const targetHour = parseTargetHour(process.argv);
   const now = new Date();
 
   console.log(
@@ -18,6 +20,10 @@ export async function main() {
   );
 
   if (isScheduled) {
+    if (targetHour === undefined) {
+      throw new Error("Scheduled runs require --target-hour (e.g. --target-hour 10).");
+    }
+
     if (now.getFullYear() !== HOLIDAY_YEAR) {
       throw new Error(
         "Holiday data only covers 2026. Update config/holidays-2026.json for another year."
@@ -29,6 +35,13 @@ export async function main() {
     if (skipReason) {
       console.log(`[kairos] Skipping: ${skipReason}`);
       return;
+    }
+
+    const waitMs = msUntilHour(now, targetHour);
+
+    if (waitMs > 0) {
+      console.log(`[kairos] Waiting ${Math.round(waitMs / 1000)}s until ${String(targetHour).padStart(2, "0")}:00.`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 
@@ -54,4 +67,20 @@ if (isDirectExecution) {
     );
     process.exit(1);
   });
+}
+
+function parseTargetHour(argv) {
+  const index = argv.indexOf("--target-hour");
+
+  if (index === -1) {
+    return undefined;
+  }
+
+  const value = Number(argv[index + 1]);
+
+  if (!Number.isInteger(value) || value < 0 || value > 23) {
+    throw new Error("--target-hour must be an integer between 0 and 23.");
+  }
+
+  return value;
 }
