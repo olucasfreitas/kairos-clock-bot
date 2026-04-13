@@ -11,8 +11,8 @@ import {
 import { punch } from "./kairos.js";
 
 export async function main() {
-  const isScheduled = process.argv.includes("--schedule");
   const targetHour = parseTargetHour(process.argv);
+  const isScheduled = targetHour !== undefined;
   const now = new Date();
 
   console.log(
@@ -20,10 +20,6 @@ export async function main() {
   );
 
   if (isScheduled) {
-    if (targetHour === undefined) {
-      throw new Error("Scheduled runs require --target-hour (e.g. --target-hour 10).");
-    }
-
     if (now.getFullYear() !== HOLIDAY_YEAR) {
       throw new Error(
         "Holiday data only covers 2026. Update config/holidays-2026.json for another year."
@@ -40,8 +36,10 @@ export async function main() {
     const waitMs = msUntilHour(now, targetHour);
 
     if (waitMs > 0) {
-      console.log(`[kairos] Waiting ${Math.round(waitMs / 1000)}s until ${String(targetHour).padStart(2, "0")}:00.`);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      console.log(
+        `[kairos] Waiting ${Math.round(waitMs / 1000)}s until ${String(targetHour).padStart(2, "0")}:00.`
+      );
+      await sleep(waitMs);
     }
   }
 
@@ -83,4 +81,8 @@ function parseTargetHour(argv) {
   }
 
   return value;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

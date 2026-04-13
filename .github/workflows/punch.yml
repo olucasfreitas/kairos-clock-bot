@@ -2,11 +2,12 @@ name: Kairos Punch
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "45 9 * * 1-5"
-      timezone: "America/Sao_Paulo"
-    - cron: "45 18 * * 1-5"
-      timezone: "America/Sao_Paulo"
+    inputs:
+      scheduled_target_hour:
+        description: Internal scheduler input. Leave empty for manual runs.
+        required: false
+        default: ""
+        type: string
 
 permissions: {}
 
@@ -18,12 +19,12 @@ env:
 
 concurrency:
   group: kairos-punch
-  cancel-in-progress: ${{ github.event_name == 'workflow_dispatch' }}
+  cancel-in-progress: ${{ inputs.scheduled_target_hour == '' }}
 
 jobs:
   punch:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
 
@@ -46,22 +47,15 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install chromium
 
-      - name: Punch at 10:00
-        if: github.event_name == 'schedule' && github.event.schedule == '45 9 * * 1-5'
+      - name: Punch (external scheduler)
+        if: inputs.scheduled_target_hour != ''
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- --schedule --target-hour 10
-
-      - name: Punch at 19:00
-        if: github.event_name == 'schedule' && github.event.schedule == '45 18 * * 1-5'
-        env:
-          KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
-          KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- --schedule --target-hour 19
+        run: npm run punch -- --target-hour "${{ inputs.scheduled_target_hour }}"
 
       - name: Punch (manual)
-        if: github.event_name == 'workflow_dispatch'
+        if: inputs.scheduled_target_hour == ''
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
