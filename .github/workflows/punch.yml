@@ -3,8 +3,8 @@ name: Kairos Punch
 on:
   workflow_dispatch:
     inputs:
-      scheduled_target_hour:
-        description: Internal scheduler input. Leave empty for manual runs.
+      scheduled_run:
+        description: Internal scheduler marker. Leave empty for manual runs.
         required: false
         default: ""
         type: string
@@ -19,7 +19,7 @@ env:
 
 concurrency:
   group: kairos-punch
-  cancel-in-progress: ${{ inputs.scheduled_target_hour == '' }}
+  cancel-in-progress: ${{ inputs.scheduled_run == '' }}
 
 jobs:
   punch:
@@ -48,14 +48,14 @@ jobs:
         run: npx playwright install chromium
 
       - name: Punch (external scheduler)
-        if: inputs.scheduled_target_hour != ''
+        if: inputs.scheduled_run != ''
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}
-        run: npm run punch -- --target-hour "${{ inputs.scheduled_target_hour }}"
+        run: npm run punch-scheduled
 
       - name: Punch (manual)
-        if: inputs.scheduled_target_hour == ''
+        if: inputs.scheduled_run == ''
         env:
           KAIROS_EMAIL: ${{ secrets.KAIROS_EMAIL }}
           KAIROS_PASSWORD: ${{ secrets.KAIROS_PASSWORD }}

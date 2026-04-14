@@ -8,15 +8,13 @@ const WEEKDAYS = [1, 2, 3, 4, 5];
 const DESIRED_JOBS = [
   {
     title: "Kairos Punch Dispatch 10:00",
-    dispatchHour: 9,
-    dispatchMinute: 45,
-    targetHour: 10
+    dispatchHour: 10,
+    dispatchMinute: 0
   },
   {
     title: "Kairos Punch Dispatch 19:00",
-    dispatchHour: 18,
-    dispatchMinute: 45,
-    targetHour: 19
+    dispatchHour: 19,
+    dispatchMinute: 0
   }
 ];
 
@@ -86,7 +84,7 @@ function buildCronJobDefinition(job, githubToken) {
       body: JSON.stringify({
         ref: "main",
         inputs: {
-          scheduled_target_hour: String(job.targetHour)
+          scheduled_run: "true"
         }
       })
     }

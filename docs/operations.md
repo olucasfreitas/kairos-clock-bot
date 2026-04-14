@@ -25,10 +25,20 @@ That command reads:
 
 `GITHUB_TOKEN` here means a personal GitHub token you provide in the local shell, not the ephemeral token GitHub Actions injects during a workflow run. It must be allowed to dispatch workflows for this repository.
 
+The repo exposes two runtime entrypoints:
+
+```bash
+npm run punch
+npm run punch-scheduled
+```
+
+- `npm run punch`: generic immediate punch command
+- `npm run punch-scheduled`: scheduled wrapper that only checks the holiday/weekend rules, then calls the generic punch command immediately
+
 ## How it works
 
-- **Scheduled**: `cron-job.org` dispatches the workflow at 09:45 and 18:45 BRT. The script skips weekends/holidays and waits in-process until exactly 10:00 / 19:00 before punching.
-- **Manual**: Click "Run workflow" in GitHub Actions and leave `scheduled_target_hour` empty. It punches immediately. Manual runs cancel any in-progress scheduled run and take priority.
+- **Scheduled**: `cron-job.org` dispatches the workflow at exactly 10:00 and 19:00 BRT. The scheduled wrapper only skips weekends/holidays, then immediately calls the generic punch command.
+- **Manual**: Click "Run workflow" in GitHub Actions and leave `scheduled_run` empty. It punches immediately. Manual runs cancel any in-progress scheduled run and take priority.
 
 ## Manual trigger
 
@@ -40,8 +50,8 @@ gh workflow run punch.yml
 
 - Runtime is plain Node.js ESM with a single dependency: `playwright`.
 - Local sanity checks expect Node 24+, matching the GitHub Actions runtime.
-- `npm run sync-cron-jobs` declaratively manages exactly two cron-job.org jobs that dispatch the workflow at 09:45 and 18:45 BRT.
-- Manual triggers cancel any in-progress scheduled run so they execute immediately. Externally scheduled dispatches do not cancel waiting runs.
+- `npm run sync-cron-jobs` declaratively manages exactly two cron-job.org jobs that dispatch the workflow at 10:00 and 19:00 BRT.
+- Manual triggers cancel any in-progress scheduled run so they execute immediately. Externally scheduled dispatches do not cancel other runs.
 - Holidays are configured in `config/holidays-2026.json` and only cover 2026. Update that file before relying on scheduled mode in another year.
 - Playwright browsers are cached between runs with `actions/cache@v5`. The first run after a cache miss or dependency change can be slower than later runs.
 - The token in `GITHUB_TOKEN` is stored in cron-job.org job headers. If it changes, rerun `npm run sync-cron-jobs` so cron-job.org gets the new dispatch header.

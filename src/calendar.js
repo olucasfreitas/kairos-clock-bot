@@ -13,13 +13,6 @@ export function shouldSkipToday(now, holidays) {
   return holidays.includes(formatDateKey(now)) ? "holiday" : undefined;
 }
 
-export function msUntilHour(now, hour) {
-  const target = new Date(now);
-
-  target.setHours(hour, 0, 0, 0);
-  return Math.max(0, target.getTime() - now.getTime());
-}
-
 export function formatDateKey(now) {
   return [
     now.getFullYear(),
