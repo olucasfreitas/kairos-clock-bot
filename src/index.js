@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { BRAZIL_TZ, formatTimestamp } from "./calendar.js";
 import { punch } from "./kairos.js";
 
-export async function runPunch() {
+export async function runPunch(options = {}) {
   const email = process.env.KAIROS_EMAIL?.trim();
   const password = process.env.KAIROS_PASSWORD?.trim();
 
@@ -11,7 +11,7 @@ export async function runPunch() {
     throw new Error("KAIROS_EMAIL and KAIROS_PASSWORD are required.");
   }
 
-  await punch(email, password);
+  await punch(email, password, options);
   console.log("[kairos] Punch recorded successfully.");
 }
 

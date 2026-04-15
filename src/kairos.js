@@ -6,7 +6,9 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const SUCCESS_TIMEOUT_MS = 15_000;
 const SUCCESS_TEXT = "marcacao de ponto inserida com sucesso";
 
-export async function punch(email, password) {
+export async function punch(email, password, options = {}) {
+  const defaultTimeoutMs = options.defaultTimeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const successTimeoutMs = options.successTimeoutMs ?? SUCCESS_TIMEOUT_MS;
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -15,8 +17,11 @@ export async function punch(email, password) {
       timezoneId: "America/Sao_Paulo"
     });
 
-    page.setDefaultTimeout(DEFAULT_TIMEOUT_MS);
-    await page.goto(KAIROS_URL, { waitUntil: "domcontentloaded" });
+    page.setDefaultTimeout(defaultTimeoutMs);
+    await page.goto(KAIROS_URL, {
+      waitUntil: "domcontentloaded",
+      timeout: defaultTimeoutMs
+    });
 
     const emailInput = page.getByPlaceholder(/e-?mail/i).first();
     await emailInput.waitFor({ state: "visible" });
@@ -37,7 +42,7 @@ export async function punch(email, password) {
         response.status() === 200 &&
         response.request().resourceType() === "document" &&
         response.url().toLowerCase().includes("/dimep/account/marcacao"),
-      { timeout: SUCCESS_TIMEOUT_MS }
+      { timeout: successTimeoutMs }
     );
 
     await punchButton.click();
@@ -58,7 +63,7 @@ export async function punch(email, password) {
           .toLowerCase()
           .includes(expectedText),
       SUCCESS_TEXT,
-      { timeout: SUCCESS_TIMEOUT_MS }
+      { timeout: successTimeoutMs }
     );
   } finally {
     await browser.close();
