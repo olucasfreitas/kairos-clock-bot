@@ -36,18 +36,17 @@ export async function punch(email, password, options = {}) {
       .first();
     await punchButton.waitFor({ state: "visible" });
 
-    // Kairos currently confirms the punch by returning the final Marcacao HTML document.
-    const marcacaoResponsePromise = page.waitForResponse(
-      (response) =>
-        response.status() === 200 &&
-        response.request().resourceType() === "document" &&
-        response.url().toLowerCase().includes("/dimep/account/marcacao"),
-      { timeout: successTimeoutMs }
-    );
-
-    await punchButton.click();
-
-    const marcacaoResponse = await marcacaoResponsePromise;
+    // Attach the response wait to the click immediately so timeouts stay inside the awaited chain.
+    const [marcacaoResponse] = await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.status() === 200 &&
+          response.request().resourceType() === "document" &&
+          response.url().toLowerCase().includes("/dimep/account/marcacao"),
+        { timeout: successTimeoutMs }
+      ),
+      punchButton.click()
+    ]);
     const marcacaoHtml = normalizeText(await marcacaoResponse.text());
 
     if (!marcacaoHtml.includes(SUCCESS_TEXT)) {
